@@ -1,0 +1,19 @@
+# Python cache
+__pycache__/
+*.py[cod]
+
+# Jupyter / VS Code / macOS
+.ipynb_checkpoints/
+.DS_Store
+
+# Generated data/cache files
+*.pkl
+
+# Training outputs
+outputs/
+results/
+checkpoints/
+*.pt
+*.pth
+*.npy
+*.npz
