@@ -192,8 +192,8 @@ def train(model_class, model_loss_class, generate_training_data, DataGenerator, 
 
         # Training loop parameters
         seq_id = 0 # Sequence ID for alternating T and alpha training
-        nIter = 30 # Number of outer iterations (epochs)
-        batch_count = 80 # Number of batches per outer iteration
+        nIter = 50 # Number of outer iterations (epochs)
+        batch_count = 100 # Number of batches per outer iteration
         seq_print = ['** Training T **', '** Training a **'] # Status messages
         seq_pid = 0 # Index for seq_print
 
