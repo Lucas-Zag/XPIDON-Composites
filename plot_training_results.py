@@ -16,6 +16,13 @@ FIG_DIR = os.path.join(OUT_DIR, "figures")
 LOSS_DIR = os.path.join(OUT_DIR, "loss_data")
 MODEL_DIR = os.path.join(OUT_DIR, "models")
 PRED_DIR = os.path.join(OUT_DIR, "predictions")
+# Set this to manually select the current run's subdomain models.
+# Use None only when outputs/ is clean.
+RUN_TAGS = None
+# Example for 3 subdomains:
+#RUN_TAGS = ["03333", "06667", "10000"]
+# Example for 5 subdomains:
+# RUN_TAGS = ["02000", "04000", "06000", "08000", "10000"]
 
 os.makedirs(FIG_DIR, exist_ok=True)
 os.makedirs(LOSS_DIR, exist_ok=True)
@@ -44,7 +51,12 @@ def safe_semilogy(history, key, label):
 # ============================================================
 # 1. Merge all loss data
 # ============================================================
-loss_files = sorted(glob.glob(os.path.join(LOSS_DIR, "loss_history_*.pkl")))
+#loss_files = sorted(glob.glob(os.path.join(LOSS_DIR, "loss_history_*.pkl")))
+loss_files = sorted(
+    f for f in glob.glob(os.path.join(LOSS_DIR, "loss_history_*.pkl"))
+    if os.path.basename(f) != "loss_history_merged.pkl"
+)
+
 
 if not loss_files:
     raise FileNotFoundError("No loss_history_*.pkl files found in outputs/loss_data")
@@ -154,9 +166,17 @@ a_by_tag = {extract_tag(f): f for f in a_files}
 
 tags = sorted(set(T_by_tag.keys()) & set(a_by_tag.keys()), key=lambda x: int(x))
 
+if RUN_TAGS is not None:
+    tags = [t for t in tags if t in RUN_TAGS]
+
 print("\nUsing model tags:")
 for tag in tags:
     print(tag, T_by_tag[tag], a_by_tag[tag])
+
+if not tags:
+    raise RuntimeError("No valid model tags selected. Check RUN_TAGS or clean outputs/models.")
+
+
 
 u_mid = (np.array(exp_params.minvals) + np.array(exp_params.maxvals)) / 2.0
 

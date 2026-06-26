@@ -200,7 +200,9 @@ def train(model_class, model_loss_class, generate_training_data, DataGenerator, 
         # Create data generators for each type of data
         ics_dataset = DataGenerator(u_ic_train, y_ic_train, s_ic_train, None, batch_size_ic, rng_key=random.PRNGKey(it_init_key))
         bcs_dataset = DataGenerator(u_bc_train, y_bc_train, s_bc_train, None, batch_size_bc, rng_key=random.PRNGKey(it_init_key + 1))
-        inf_dataset = DataGenerator(u_inf_train, y_inf_train_orig, s_inf_train, None, batch_size_bc, rng_key=random.PRNGKey(it_init_key + 4))
+        #inf_dataset = DataGenerator(u_inf_train, y_inf_train_orig, s_inf_train, None, batch_size_bc, rng_key=random.PRNGKey(it_init_key + 4))
+        inf_dataset = DataGenerator(u_inf_train, y_inf_train_orig, s_inf_train, None, batch_size_inf, rng_key=random.PRNGKey(it_init_key + 4))
+        
         res_dataset = DataGenerator(u_res_train, y_res_train_orig,s_res_train, None, batch_size_res, rng_key=random.PRNGKey(it_init_key + 2))
         ode_dataset = DataGenerator(u_res_train, y_res_train_orig,s_res_train, None, batch_size_res, rng_key=random.PRNGKey(it_init_key + 2))
 
@@ -251,9 +253,28 @@ def train(model_class, model_loss_class, generate_training_data, DataGenerator, 
             y_res_train = random.permutation(key_train[key_counter], y_res_train_orig)
             y_inf_train = random.permutation(key_train[key_counter], y_inf_train_orig)
             
+            
+            
             # Re-initialize data generators with permuted data
-            res_dataset = DataGenerator(u_res_train,y_res_train,s_res_train, None, batch_size_res, rng_key=random.PRNGKey(it + 2))
+            res_dataset = DataGenerator(
+                u_res_train,
+                y_res_train,
+                s_res_train,
+                None,
+                batch_size_res,
+                rng_key=random.PRNGKey(it + 2)
+            )
             res_data = iter(res_dataset)
+
+            inf_dataset = DataGenerator(
+                u_inf_train,
+                y_inf_train,
+                s_inf_train,
+                None,
+                batch_size_inf,
+                rng_key=random.PRNGKey(it + 4)
+            )
+            inf_data = iter(inf_dataset)
         
 
             # --- Plotting Predictions (every 10 epochs) ---
@@ -389,19 +410,12 @@ def train(model_class, model_loss_class, generate_training_data, DataGenerator, 
                         loss_bct_value = loss.loss_bct(T_params, bcs_batch)
                         loss_bcb_value = loss.loss_bcb(T_params, bcs_batch)
                         loss_res_value = loss.loss_res(T_params, a_params, res_batch, b_val)
-                        loss_res_tool_value = loss.loss_res_tool(T_params, inf_batch)
+                        #loss_res_tool_value = loss.loss_res_tool(T_params, inf_batch)
+                        loss_res_tool_value = loss.loss_res_tool(T_params, res_batch)
+                        
                         loss_inf_value = loss.loss_inf(T_params, inf_batch)
                         loss_flux_value = loss.loss_flux(T_params, inf_batch)
                         
-                        loss_log.append(loss_T_value) #06.26
-                        loss_ics_T_log.append(loss_ics_T_value)
-                        loss_ics_tool_log.append(loss_ics_tool_value)
-                        loss_bct_log.append(loss_bct_value)
-                        loss_bcb_log.append(loss_bcb_value)
-                        loss_res_log.append(loss_res_value)
-                        loss_res_tool_log.append(loss_res_tool_value)
-                        loss_inf_log.append(loss_inf_value)
-                        loss_flux_log.append(loss_flux_value)
                        
                         # Recalculate alpha-related losses for display, as they might have changed due to T_params update affecting cure_kinetics
                         loss_a_value = loss.total_loss_a(T_params, a_params, ics_batch, bcs_batch, res_batch, ode_batch, inf_batch, inf_batch, weights_ode)
@@ -462,7 +476,8 @@ def train(model_class, model_loss_class, generate_training_data, DataGenerator, 
                         loss_bct_value = loss.loss_bct(T_params, bcs_batch)
                         loss_bcb_value = loss.loss_bcb(T_params, bcs_batch)
                         loss_res_value = loss.loss_res(T_params, a_params, res_batch, b_val)
-                        loss_res_tool_value = loss.loss_res_tool(T_params, inf_batch)
+                        #loss_res_tool_value = loss.loss_res_tool(T_params, inf_batch)
+                        loss_res_tool_value = loss.loss_res_tool(T_params, res_batch)
                         loss_inf_value = loss.loss_inf(T_params, inf_batch)
                         loss_flux_value = loss.loss_flux(T_params, inf_batch)
                         
@@ -519,7 +534,8 @@ def train(model_class, model_loss_class, generate_training_data, DataGenerator, 
                         loss_bct_value = loss.loss_bct(T_params, bcs_batch)
                         loss_bcb_value = loss.loss_bcb(T_params, bcs_batch)
                         loss_res_value = loss.loss_res(T_params, a_params, res_batch, b_val)
-                        loss_res_tool_value = loss.loss_res_tool(T_params, inf_batch)
+                        #loss_res_tool_value = loss.loss_res_tool(T_params, inf_batch)
+                        loss_res_tool_value = loss.loss_res_tool(T_params, res_batch)
                         loss_inf_value = loss.loss_inf(T_params, inf_batch)
                         loss_flux_value = loss.loss_flux(T_params, inf_batch)
 
