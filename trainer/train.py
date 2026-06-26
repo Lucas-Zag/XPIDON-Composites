@@ -9,6 +9,8 @@ import itertools
 from tqdm import trange
 import jax
 
+import os
+
 """
 Domain decomposition training for XPIDON.
 """
@@ -190,8 +192,8 @@ def train(model_class, model_loss_class, generate_training_data, DataGenerator, 
 
         # Training loop parameters
         seq_id = 0 # Sequence ID for alternating T and alpha training
-        nIter = 20 # Number of outer iterations (epochs)
-        batch_count = 100 # Number of batches per outer iteration
+        nIter = 30 # Number of outer iterations (epochs)
+        batch_count = 80 # Number of batches per outer iteration
         seq_print = ['** Training T **', '** Training a **'] # Status messages
         seq_pid = 0 # Index for seq_print
 
@@ -390,6 +392,17 @@ def train(model_class, model_loss_class, generate_training_data, DataGenerator, 
                         loss_res_tool_value = loss.loss_res_tool(T_params, inf_batch)
                         loss_inf_value = loss.loss_inf(T_params, inf_batch)
                         loss_flux_value = loss.loss_flux(T_params, inf_batch)
+                        
+                        loss_log.append(loss_T_value) #06.26
+                        loss_ics_T_log.append(loss_ics_T_value)
+                        loss_ics_tool_log.append(loss_ics_tool_value)
+                        loss_bct_log.append(loss_bct_value)
+                        loss_bcb_log.append(loss_bcb_value)
+                        loss_res_log.append(loss_res_value)
+                        loss_res_tool_log.append(loss_res_tool_value)
+                        loss_inf_log.append(loss_inf_value)
+                        loss_flux_log.append(loss_flux_value)
+                       
                         # Recalculate alpha-related losses for display, as they might have changed due to T_params update affecting cure_kinetics
                         loss_a_value = loss.total_loss_a(T_params, a_params, ics_batch, bcs_batch, res_batch, ode_batch, inf_batch, inf_batch, weights_ode)
                         loss_ics_a_value = loss.loss_ics_a(a_params, ics_batch)
@@ -564,6 +577,49 @@ def train(model_class, model_loss_class, generate_training_data, DataGenerator, 
                 
             print(f"\nModels saved for converged subdomain {dd_list[sub_count]:.2f} - {dd_list[sub_count+1]:.2f}")
             print(f"Saved as {filename_T} and {filename_a}")
+            
+            # -----------------------------
+            # Create output folders
+            # -----------------------------
+            os.makedirs("outputs/models", exist_ok=True)
+            os.makedirs("outputs/loss_data", exist_ok=True)
+            os.makedirs("outputs/figures", exist_ok=True)
+
+            current_sub_end_time_str = f"{dd_list[sub_count+1]:.4f}".replace(".", "")
+
+            filename_T = f"outputs/models/xpidon_class_{current_sub_end_time_str}_T.pkl"
+            filename_a = f"outputs/models/xpidon_class_{current_sub_end_time_str}_a.pkl"
+
+            with open(filename_T, "wb") as f:
+                pickle.dump(T_params, f)
+
+            with open(filename_a, "wb") as f:
+                pickle.dump(a_params, f)
+
+            print(f"\nModels saved for converged subdomain {dd_list[sub_count]:.2f} - {dd_list[sub_count+1]:.2f}")
+            print(f"Saved as {filename_T} and {filename_a}")
+
+            loss_history = {
+                "loss_T": [float(x) for x in loss_log],
+                "loss_a": [float(x) for x in loss_a_log],
+                "loss_ics_T": [float(x) for x in loss_ics_T_log],
+                "loss_ics_tool": [float(x) for x in loss_ics_tool_log],
+                "loss_ics_a": [float(x) for x in loss_ics_a_log],
+                "loss_bct": [float(x) for x in loss_bct_log],
+                "loss_bcb": [float(x) for x in loss_bcb_log],
+                "loss_res": [float(x) for x in loss_res_log],
+                "loss_res_tool": [float(x) for x in loss_res_tool_log],
+                "loss_ode": [float(x) for x in loss_ode_log],
+                "loss_inf": [float(x) for x in loss_inf_log],
+                "loss_flux": [float(x) for x in loss_flux_log],
+            }
+
+            loss_file = f"outputs/loss_data/loss_history_{current_sub_end_time_str}.pkl"
+            with open(loss_file, "wb") as f:
+                pickle.dump(loss_history, f)
+
+            print(f"Loss history saved as {loss_file}")
+            
             
             # Move to the next subdomain in the list
             sub_count += 1
