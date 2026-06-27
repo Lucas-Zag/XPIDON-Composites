@@ -62,13 +62,14 @@ if not loss_files:
     raise FileNotFoundError("No loss_history_*.pkl files found in outputs/loss_data")
 
 loss_history = {}
+loss_file_histories = []
 
 print("Using loss files:")
 for lf in loss_files:
     print(" ", lf)
     with open(lf, "rb") as f:
         h = pickle.load(f)
-
+    loss_file_histories.append((os.path.basename(lf), h))
     for k, v in h.items():
         loss_history.setdefault(k, [])
         loss_history[k].extend(v)
@@ -99,6 +100,13 @@ safe_semilogy(loss_history, "loss_ics_tool", "Tool IC")
 safe_semilogy(loss_history, "loss_inf", "Interface temperature")
 safe_semilogy(loss_history, "loss_flux", "Interface flux")
 
+# Draw subdomain boundaries for temperature loss plot
+temp_lengths = [len(h.get("loss_T", [])) for _, h in loss_file_histories]
+temp_boundaries = np.cumsum(temp_lengths)[:-1]
+
+for b in temp_boundaries:
+    plt.axvline(b, color="gray", linestyle=":", linewidth=1, alpha=0.6)
+
 if not plt.gca().has_data():
     plt.text(0.5, 0.5, "No temperature loss data saved.\nRun more iterations or record T loss in alpha block.",
              ha="center", va="center", transform=plt.gca().transAxes)
@@ -125,6 +133,14 @@ plt.figure(figsize=(8, 5))
 safe_semilogy(loss_history, "loss_a", "Total degree of cure loss")
 safe_semilogy(loss_history, "loss_ode", "Cure ODE residual")
 safe_semilogy(loss_history, "loss_ics_a", "Degree of cure IC")
+
+# Draw subdomain boundaries for degree-of-cure loss plot
+doc_lengths = [len(h.get("loss_a", [])) for _, h in loss_file_histories]
+doc_boundaries = np.cumsum(doc_lengths)[:-1]
+
+for b in doc_boundaries:
+    plt.axvline(b, color="gray", linestyle=":", linewidth=1, alpha=0.6)
+
 
 if not plt.gca().has_data():
     plt.text(0.5, 0.5, "No degree of cure loss data saved.",
@@ -282,6 +298,22 @@ print("Saved:", prediction_csv)
 fig, ax1 = plt.subplots(figsize=(8, 5))
 
 ax1.plot(all_time_physical / 60.0, all_T, label="Predicted temperature")
+# Mark temporal subdomain boundaries
+for tag in tags[:-1]:
+    boundary_min = tag_to_fraction(tag) * exp_params.t_max / 60.0
+    ax1.axvline(boundary_min, color="gray", linestyle=":", linewidth=1, alpha=0.7)
+    ax1.text(
+        boundary_min,
+        ax1.get_ylim()[1] * 0.95,
+        tag,
+        rotation=90,
+        va="top",
+        ha="right",
+        fontsize=7,
+        color="gray"
+    )
+
+
 ax1.set_xlabel("Time (min)")
 ax1.set_ylabel("Temperature")
 ax1.grid(True, linestyle="--", alpha=0.4)
