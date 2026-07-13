@@ -1,9 +1,9 @@
 {
     "N": 500,
-    "P_ic": 150,
-    "P_bc": 200,
+    "P_ic": 100,
+    "P_bc": 100,
     "Q_train": 500,
-    "batch_size_ic": 128,
+    "batch_size_ic": 64,
     "batch_size_inf": 128,
     "batch_size_bc": 128,
     "batch_size_res": 256,

@@ -1,0 +1,9 @@
+{
+  "t_int_min": 0.0,
+  "t_int_max": 18800.0,
+  "N": 500,
+  "P_ic": 100,
+  "P_bc": 100,
+  "Q_train": 500,
+  "first_subdomain": true
+}

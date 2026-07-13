@@ -154,6 +154,66 @@ def train(model_class, model_loss_class, generate_training_data, DataGenerator, 
             t_int_min, t_int_max, T_params_pre, a_params_pre, md, Temp_air, exp_params, N,
             P_ic, P_bc, Q_train, hold = 'two', first_subdomain = first_sub
         )
+        
+        #         # ===== Debug: save generated training data before DataGenerator =====
+        # from pathlib import Path
+        # import numpy as onp
+        # import json
+
+        # debug_dir = Path("debug_generated_data")
+        # debug_dir.mkdir(exist_ok=True)
+
+        # onp.save(debug_dir / "u_bc_train.npy", onp.asarray(u_bc_train))
+        # onp.save(debug_dir / "y_bc_train.npy", onp.asarray(y_bc_train))
+        # onp.save(debug_dir / "s_bc_train.npy", onp.asarray(s_bc_train))
+
+        # onp.save(debug_dir / "u_ic_train.npy", onp.asarray(u_ic_train))
+        # onp.save(debug_dir / "y_ic_train.npy", onp.asarray(y_ic_train))
+        # onp.save(debug_dir / "s_ic_train.npy", onp.asarray(s_ic_train))
+
+        # onp.save(debug_dir / "u_res_train.npy", onp.asarray(u_res_train))
+        # onp.save(debug_dir / "y_res_train_orig.npy", onp.asarray(y_res_train_orig))
+        # onp.save(debug_dir / "s_res_train.npy", onp.asarray(s_res_train))
+
+        # onp.save(debug_dir / "u_inf_train.npy", onp.asarray(u_inf_train))
+        # onp.save(debug_dir / "y_inf_train_orig.npy", onp.asarray(y_inf_train_orig))
+        # onp.save(debug_dir / "s_inf_train.npy", onp.asarray(s_inf_train))
+
+        # meta = {
+        #     "t_int_min": float(t_int_min),
+        #     "t_int_max": float(t_int_max),
+        #     "N": int(N),
+        #     "P_ic": int(P_ic),
+        #     "P_bc": int(P_bc),
+        #     "Q_train": int(Q_train),
+        #     "first_subdomain": bool(first_sub),
+        # }
+
+        # with open(debug_dir / "metadata.json", "w") as f:
+        #     json.dump(meta, f, indent=2)
+
+        # print("\n[DEBUG] Saved generated training data to debug_generated_data/")
+        # print("u_bc_train:", u_bc_train.shape)
+        # print("y_bc_train:", y_bc_train.shape)
+        # print("s_bc_train:", s_bc_train.shape)
+        # print("u_ic_train:", u_ic_train.shape)
+        # print("y_ic_train:", y_ic_train.shape)
+        # print("s_ic_train:", s_ic_train.shape)
+        # print("u_res_train:", u_res_train.shape)
+        # print("y_res_train_orig:", y_res_train_orig.shape)
+        # print("s_res_train:", s_res_train.shape)
+        # print("u_inf_train:", u_inf_train.shape)
+        # print("y_inf_train_orig:", y_inf_train_orig.shape)
+        # print("s_inf_train:", s_inf_train.shape)
+
+        # # 如果你只是想查看训练数据，不想继续训练，先保留下面两行。
+        # # 确认数据后，再把这两行注释掉。
+        # import sys
+        # sys.exit("[DEBUG] Stop after saving generated training data.")
+        # # ================================================================
+        
+        
+        
 
         # --- 5. Data Batching Setup ---
         # Define batch sizes for different types of training data
