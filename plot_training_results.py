@@ -6,6 +6,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import jax.numpy as jnp
 
+from utils.air_temp import Temp_air
 from utils.phy_params import PhyParams
 from utils.exp_params import ExpParams
 from models.pidon import XPIDON
@@ -194,7 +195,73 @@ if not tags:
 
 
 
-u_mid = (np.array(exp_params.minvals) + np.array(exp_params.maxvals)) / 2.0
+#u_mid = (np.array(exp_params.minvals) + np.array(exp_params.maxvals)) / 2.0
+# ============================================================
+# Fixed physical validation case
+# ============================================================
+
+ramp1_C_min = 2.2
+hold1_T_C = 110.0
+hold1_d_min = 58.0
+
+ramp2_C_min = 2.2
+hold2_T_C = 180.0
+hold2_d_min = 105.0
+
+htc_bot_W_m2K = 90.0
+htc_top_W_m2K = 75.0
+tool_len_m = 0.025
+
+
+# Convert physical parameters to the exact scaled format
+# used during XPIDON training.
+u_case = np.array([
+    # ramp 1
+    (ramp1_C_min / 60.0)
+    * (exp_params.T_scaler * exp_params.t_max),
+
+    # first hold temperature
+    hold1_T_C * exp_params.T_scaler,
+
+    # first hold duration
+    hold1_d_min * 60.0 / exp_params.t_max,
+
+    # ramp 2
+    (ramp2_C_min / 60.0)
+    * (exp_params.T_scaler * exp_params.t_max),
+
+    # second hold temperature
+    hold2_T_C * exp_params.T_scaler,
+
+    # second hold duration
+    hold2_d_min * 60.0 / exp_params.t_max,
+
+    # bottom HTC
+    htc_bot_W_m2K * exp_params.h_scaler,
+
+    # top HTC
+    htc_top_W_m2K * exp_params.h_scaler,
+
+    # tool thickness
+    tool_len_m * exp_params.len_scaler,
+], dtype=np.float32)
+
+
+print("\nValidation case in physical units:")
+print("ramp1 =", ramp1_C_min, "C/min")
+print("hold1 =", hold1_T_C, "C,", hold1_d_min, "min")
+print("ramp2 =", ramp2_C_min, "C/min")
+print("hold2 =", hold2_T_C, "C,", hold2_d_min, "min")
+print("hbot   =", htc_bot_W_m2K, "W/m2K")
+print("htop   =", htc_top_W_m2K, "W/m2K")
+print("Lt     =", tool_len_m, "m")
+
+print("\nScaled XPIDON input:")
+print(u_case)
+
+
+
+
 
 all_time_physical = []
 all_T = []
@@ -240,14 +307,28 @@ for tag in tags:
     x_fixed = 0.5 * np.ones_like(t_local)
 
     Y_star = np.column_stack([t_local, x_fixed])
-    U_star = np.tile(u_mid, (nt, 1))
+    #U_star = np.tile(u_mid, (nt, 1))
+    U_star = np.tile(u_case, (nt, 1))
+    T_pred_scaled = model.pred_T(
+        T_params,
+        jnp.array(U_star),
+        jnp.array(Y_star)
+    )
 
-    T_pred = model.pred_T(T_params, jnp.array(U_star), jnp.array(Y_star))
-    a_pred = model.pred_a(a_params, jnp.array(U_star), jnp.array(Y_star))
+    a_pred = model.pred_a(
+        a_params,
+        jnp.array(U_star),
+        jnp.array(Y_star)
+    )
+
+    T_pred_C = (
+        np.asarray(T_pred_scaled)
+        / exp_params.T_scaler
+    )
 
     all_time_physical.append(t_physical)
-    all_T.append(np.array(T_pred))
-    all_a.append(np.array(a_pred))
+    all_T.append(T_pred_C)
+    all_a.append(np.asarray(a_pred))
 
     previous_fraction = end_fraction
 
@@ -262,6 +343,58 @@ order = np.argsort(all_time_physical)
 all_time_physical = all_time_physical[order]
 all_T = all_T[order]
 all_a = all_a[order]
+
+# ============================================================
+# Generate the same autoclave air-temperature curve
+# ============================================================
+
+Ta_scaled = Temp_air(
+    exp_params.T_ini,   # already scaled inside ExpParams
+    u_case[0],          # scaled ramp1
+    u_case[1],          # scaled hold1 temperature
+    u_case[2],          # scaled hold1 duration
+    u_case[3],          # scaled ramp2
+    u_case[4],          # scaled hold2 temperature
+    u_case[5],          # scaled hold2 duration
+    1.0,                # normalized total process time
+).two_hold(
+    all_time_physical / exp_params.t_max
+)
+
+Ta_C = (
+    np.asarray(Ta_scaled)
+    / exp_params.T_scaler
+)
+
+exotherm_C = all_T - Ta_C
+
+peak_index = int(np.argmax(exotherm_C))
+
+print("\nExotherm diagnostic:")
+print(
+    "Maximum T_part - T_air =",
+    float(exotherm_C[peak_index]),
+    "C"
+)
+print(
+    "Peak time =",
+    float(all_time_physical[peak_index] / 60.0),
+    "min"
+)
+print(
+    "Part temperature at peak =",
+    float(all_T[peak_index]),
+    "C"
+)
+print(
+    "Air temperature at peak =",
+    float(Ta_C[peak_index]),
+    "C"
+)
+
+
+
+
 
 prediction_data = {
     "time_seconds": all_time_physical,
@@ -298,6 +431,13 @@ print("Saved:", prediction_csv)
 fig, ax1 = plt.subplots(figsize=(8, 5))
 
 ax1.plot(all_time_physical / 60.0, all_T, label="Predicted temperature")
+ax1.plot(
+    all_time_physical / 60.0,
+    Ta_C,
+    linestyle=":",
+    linewidth=2,
+    label="Autoclave air temperature"
+)
 # Mark temporal subdomain boundaries
 for tag in tags[:-1]:
     boundary_min = tag_to_fraction(tag) * exp_params.t_max / 60.0

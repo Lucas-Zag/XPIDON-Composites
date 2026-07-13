@@ -251,10 +251,11 @@ def train(model_class, model_loss_class, generate_training_data, DataGenerator, 
         loss_lr_log = [] # Learning rate log (not used in current pbar, but useful)
 
         # Training loop parameters
-        seq_id = 0 # Sequence ID for alternating T and alpha training
-        nIter = 200 # Number of outer iterations (epochs)
-        batch_count = 1000 # Number of batches per outer iteration
-        seq_print = ['** Training T **', '** Training a **'] # Status messages
+        seq_id = 1 # Sequence ID for alternating T and alpha training
+        nIter = 100 # Number of outer iterations (epochs)
+        batch_count = 300 # Number of batches per outer iteration
+        seq_print = [ '** Training a **',  '** Training T **']
+        #seq_print = ['** Training T **', '** Training a **'] # Status messages
         seq_pid = 0 # Index for seq_print
 
         # Create data generators for each type of data
@@ -279,8 +280,21 @@ def train(model_class, model_loss_class, generate_training_data, DataGenerator, 
         key_train = random.split(key, nIter + 100) # Ensure enough keys for permutations
 
         # Fixed beta value
-        b_val = 0.7003080410794345
+        #b_val = 0.7003080410794345
+        B_TARGET = 0.7003080410794345
 
+        b_schedule = [
+            0.0,
+            0.1750770103,
+            0.3501540205,
+            0.5252310308,
+            0.7003080411,
+        ]
+        # 200 iterations / 5 stages = 40 iterations per stage
+        stage_length = max(
+            1,
+            nIter // len(b_schedule)
+        )
         # Initialize loss values for the first printout (before any training steps)
         # These will be updated after the first batch.
         loss_T_value = float('inf')
@@ -301,6 +315,20 @@ def train(model_class, model_loss_class, generate_training_data, DataGenerator, 
         # --- 7. Main Training Loop ---
         pbar = trange(nIter, ncols=500, desc="Training Progress") # Progress bar
         for it in pbar: # Outer loop for epochs
+                # ========================================================
+            # Select the heat-generation coefficient for this stage
+            # ========================================================
+
+            stage_id = min(
+                it // stage_length,
+                len(b_schedule) - 1
+            )
+
+            b_val = float(
+                b_schedule[stage_id]
+            )
+                                   
+            
             key_counter += 1
             
             # Save temporary parameters (useful for debugging or resuming)
@@ -630,41 +658,151 @@ def train(model_class, model_loss_class, generate_training_data, DataGenerator, 
                         
         # --- 8. Subdomain Convergence Check and Saving/Splitting ---
         # After completing all training iterations for the current subdomain
-        if loss_T_value > Tolerance_level or loss_a_value > Tolerance_level:
-            # If losses are too high, split the current subdomain into two
-            # Insert a new midpoint into the dd_list to refine the decomposition
-            new_midpoint = round((dd_list[sub_count] + dd_list[sub_count+1])/2, 4)
-            dd_list.insert(sub_count + 1, new_midpoint)
-            print(f'\nLosses {loss_T_value:.2e} (T), {loss_a_value:.2e} (a) exceed tolerance {Tolerance_level:.2e}.')
-            print(f'Subdomain split. New decomposition: {dd_list}')
-            # The loop will re-process the current 'sub_count' with the new, smaller range
-            # and then proceed to the next segment.
+        # --- 8. Subdomain Convergence Check and Saving/Splitting ---
+
+        MAX_SUBDOMAINS = 3
+        MIN_SUBDOMAIN_WIDTH = 0.02
+
+        current_width = (
+            dd_list[sub_count + 1]
+            - dd_list[sub_count]
+        )
+
+        child_width = current_width / 2.0
+        current_subdomain_count = len(dd_list) - 1
+
+        loss_not_converged = (
+            loss_T_value > Tolerance_level
+            or loss_a_value > Tolerance_level
+        )
+
+        width_allows_split = (
+            child_width >= MIN_SUBDOMAIN_WIDTH
+        )
+
+        count_allows_split = (
+            current_subdomain_count < MAX_SUBDOMAINS
+        )
+
+        can_split = (
+            width_allows_split
+            and count_allows_split
+        )
+
+
+        # ============================================================
+        # Case 1: loss is too high and splitting is still allowed
+        # ============================================================
+        if loss_not_converged and can_split:
+
+            new_midpoint = round(
+                (
+                    dd_list[sub_count]
+                    + dd_list[sub_count + 1]
+                ) / 2.0,
+                4
+            )
+
+            dd_list.insert(
+                sub_count + 1,
+                new_midpoint
+            )
+
+            print(
+                f"\nLosses exceed tolerance "
+                f"{Tolerance_level:.2e}: "
+                f"loss_T={loss_T_value:.2e}, "
+                f"loss_a={loss_a_value:.2e}"
+            )
+
+            print(
+                f"Splitting current interval. "
+                f"Current width={current_width:.4f}, "
+                f"new child width={child_width:.4f}"
+            )
+
+            print(
+                f"New decomposition: {dd_list}"
+            )
+
+            # Important:
+            # Do not increase sub_count here.
+            # The while loop will train the newly created smaller subdomain.
+
+
+        # ============================================================
+        # Case 2:
+        #   A. losses have converged
+        #   OR
+        #   B. losses have not converged, but splitting must stop
+        # ============================================================
         else:
-            # If losses are within tolerance, the subdomain is considered converged
-            # Save the trained parameters for this subdomain
-            current_sub_end_time_str = str(dd_list[sub_count+1])[2:] # e.g., '05' for 0.5, '10' for 1.0
-            filename_T =  f"xpidon_class_0{current_sub_end_time_str}_T.pkl"
-            filename_a =  f"xpidon_class_0{current_sub_end_time_str}_a.pkl"
-            
-            with open(filename_T, 'wb') as f:
-                pickle.dump(T_params, f)
-            with open(filename_a, 'wb') as f:
-                pickle.dump(a_params, f)
-                
-            print(f"\nModels saved for converged subdomain {dd_list[sub_count]:.2f} - {dd_list[sub_count+1]:.2f}")
-            print(f"Saved as {filename_T} and {filename_a}")
-            
-            # -----------------------------
-            # Create output folders
-            # -----------------------------
-            os.makedirs("outputs/models", exist_ok=True)
-            os.makedirs("outputs/loss_data", exist_ok=True)
-            os.makedirs("outputs/figures", exist_ok=True)
 
-            current_sub_end_time_str = f"{dd_list[sub_count+1]:.4f}".replace(".", "")
+            accepted_with_warning = loss_not_converged
 
-            filename_T = f"outputs/models/xpidon_class_{current_sub_end_time_str}_T.pkl"
-            filename_a = f"outputs/models/xpidon_class_{current_sub_end_time_str}_a.pkl"
+            if accepted_with_warning:
+
+                reasons = []
+
+                if not width_allows_split:
+                    reasons.append(
+                        f"child width {child_width:.4f} "
+                        f"would be smaller than minimum "
+                        f"{MIN_SUBDOMAIN_WIDTH:.4f}"
+                    )
+
+                if not count_allows_split:
+                    reasons.append(
+                        f"maximum subdomain count "
+                        f"{MAX_SUBDOMAINS} has been reached"
+                    )
+
+                print(
+                    "\nWARNING: Current subdomain did not reach "
+                    f"tolerance {Tolerance_level:.2e}, "
+                    "but further splitting was stopped."
+                )
+
+                print(
+                    f"loss_T={loss_T_value:.2e}, "
+                    f"loss_a={loss_a_value:.2e}"
+                )
+
+                print(
+                    "Reason: " + "; ".join(reasons)
+                )
+
+                convergence_status = "accepted_with_warning"
+
+            else:
+
+                print(
+                    "\nSubdomain converged:"
+                    f" loss_T={loss_T_value:.2e},"
+                    f" loss_a={loss_a_value:.2e}"
+                )
+
+                convergence_status = "converged"
+
+
+            # ========================================================
+            # Keep the original model-saving code below this point
+            # Everything must remain indented inside this else block.
+            # ========================================================
+
+            current_sub_end_time_str = str(
+                dd_list[sub_count + 1]
+            )[2:]
+
+            filename_T = (
+                f"xpidon_class_0"
+                f"{current_sub_end_time_str}_T.pkl"
+            )
+
+            filename_a = (
+                f"xpidon_class_0"
+                f"{current_sub_end_time_str}_a.pkl"
+            )
 
             with open(filename_T, "wb") as f:
                 pickle.dump(T_params, f)
@@ -672,9 +810,44 @@ def train(model_class, model_loss_class, generate_training_data, DataGenerator, 
             with open(filename_a, "wb") as f:
                 pickle.dump(a_params, f)
 
-            print(f"\nModels saved for converged subdomain {dd_list[sub_count]:.2f} - {dd_list[sub_count+1]:.2f}")
-            print(f"Saved as {filename_T} and {filename_a}")
+            print(
+                f"\nModel saved for subdomain "
+                f"{dd_list[sub_count]:.4f} - "
+                f"{dd_list[sub_count + 1]:.4f}"
+            )
 
+            print(
+                f"Status: {convergence_status}"
+            )
+
+
+            # Keep your existing outputs/models saving code here
+            os.makedirs("outputs/models", exist_ok=True)
+            os.makedirs("outputs/loss_data", exist_ok=True)
+            os.makedirs("outputs/figures", exist_ok=True)
+
+            current_sub_end_time_str = (
+                f"{dd_list[sub_count + 1]:.4f}"
+                .replace(".", "")
+            )
+
+            filename_T = (
+                f"outputs/models/"
+                f"xpidon_class_{current_sub_end_time_str}_T.pkl"
+            )
+
+            filename_a = (
+                f"outputs/models/"
+                f"xpidon_class_{current_sub_end_time_str}_a.pkl"
+            )
+
+            with open(filename_T, "wb") as f:
+                pickle.dump(T_params, f)
+
+            with open(filename_a, "wb") as f:
+                pickle.dump(a_params, f)
+
+            # Keep the existing loss-history saving code here
             loss_history = {
                 "loss_T": [float(x) for x in loss_log],
                 "loss_a": [float(x) for x in loss_a_log],
@@ -688,16 +861,20 @@ def train(model_class, model_loss_class, generate_training_data, DataGenerator, 
                 "loss_ode": [float(x) for x in loss_ode_log],
                 "loss_inf": [float(x) for x in loss_inf_log],
                 "loss_flux": [float(x) for x in loss_flux_log],
+                "convergence_status": convergence_status,
             }
 
-            loss_file = f"outputs/loss_data/loss_history_{current_sub_end_time_str}.pkl"
+            loss_file = (
+                f"outputs/loss_data/"
+                f"loss_history_{current_sub_end_time_str}.pkl"
+            )
+
             with open(loss_file, "wb") as f:
                 pickle.dump(loss_history, f)
 
-            print(f"Loss history saved as {loss_file}")
-            
-            
-            # Move to the next subdomain in the list
+
+            # Important:
+            # Only increase sub_count after the model has been accepted/saved.
             sub_count += 1
 
     print("\n--- Domain Decomposition Training Complete ---")
