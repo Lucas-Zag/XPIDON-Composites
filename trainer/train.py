@@ -112,26 +112,77 @@ def train(model_class, model_loss_class, generate_training_data, DataGenerator, 
         t_min_l, t_max_l, del_t_l = md.get_t_params()
 
         # --- 3. Load Pre-trained Parameters (if not first subdomain) ---
-        if first_sub:
-            # For the first subdomain, use the randomly initialized parameters
-            T_params_pre, a_params_pre = md.get_weights()
-        else:
-            # For subsequent subdomains, load parameters from the end of the previous subdomain
-            # The filename uses the end time of the previous subdomain (which is the start time of current)
-            prev_sub_end_time_str = str(dd_list[sub_count])[2:] # e.g., '05' for 0.5
-            file_T = Path(f"xpidon_class_0{prev_sub_end_time_str}_T.pkl")
-            file_a = Path(f"xpidon_class_0{prev_sub_end_time_str}_a.pkl")
-            
-            if file_T.exists() and file_a.exists():
-                with open(file_T, 'rb') as f:
-                    T_params_pre = pickle.load(f)
-                with open(file_a, 'rb') as f:
-                    a_params_pre = pickle.load(f)
-                print(f"Loaded pre-trained parameters from {file_T.name} and {file_a.name}")
-            else:
-                print(f"Warning: Pre-trained files not found for subdomain start {dd_list[sub_count]}. Initializing from scratch.")
-                T_params_pre, a_params_pre = md.get_weights() # Fallback to random init
 
+        # ============================================================
+        # Load previous subdomain and warm-start current subdomain
+        # ============================================================
+
+        if first_sub:
+            # First subdomain has no previous model
+            T_params_pre = T_params
+            a_params_pre = a_params
+
+            print("First subdomain: using initial model parameters.")
+
+        else:
+            # This exactly matches the naming rule used when models are saved:
+            # 0.2000 -> 02000
+            # 0.3000 -> 03000
+            # 1.0000 -> 10000
+            prev_tag = (
+                f"{dd_list[sub_count]:.4f}"
+                .replace(".", "")
+            )
+
+            file_T = (
+                Path("outputs/models")
+                / f"xpidon_class_{prev_tag}_T.pkl"
+            )
+
+            file_a = (
+                Path("outputs/models")
+                / f"xpidon_class_{prev_tag}_a.pkl"
+            )
+
+            if not file_T.exists() or not file_a.exists():
+                raise FileNotFoundError(
+                    "Previous subdomain model is missing.\n"
+                    f"Expected: {file_T}\n"
+                    f"Expected: {file_a}\n"
+                    "Training was stopped to prevent broken "
+                    "subdomain continuity."
+                )
+
+            with open(file_T, "rb") as f:
+                T_params_pre = pickle.load(f)
+
+            with open(file_a, "rb") as f:
+                a_params_pre = pickle.load(f)
+
+            print(
+                "Loaded previous subdomain models:\n"
+                f"  {file_T}\n"
+                f"  {file_a}"
+            )
+
+            # Warm-start the new subdomain
+            T_params = T_params_pre
+            a_params = a_params_pre
+
+            # Keep model attributes consistent
+            md.T_params = T_params
+            md.a_params = a_params
+
+            # Create fresh Adam states for the loaded weights
+            md.opt_state_T = md.optimizer_T.init(T_params)
+            md.opt_state_a = md.optimizer_a.init(a_params)
+
+            print(
+                "Current subdomain initialized from "
+                "previous subdomain weights."
+            )
+                
+                
         # --- 4. Generate Training Data ---
         # Define parameters for data generation
         taskkey = random.PRNGKey(65203)
@@ -252,8 +303,8 @@ def train(model_class, model_loss_class, generate_training_data, DataGenerator, 
 
         # Training loop parameters
         seq_id = 1 # Sequence ID for alternating T and alpha training
-        nIter = 100 # Number of outer iterations (epochs)
-        batch_count = 300 # Number of batches per outer iteration
+        nIter = 200 # Number of outer iterations (epochs)
+        batch_count = 800 # Number of batches per outer iteration
         seq_print = [ '** Training a **',  '** Training T **']
         #seq_print = ['** Training T **', '** Training a **'] # Status messages
         seq_pid = 0 # Index for seq_print
@@ -660,7 +711,7 @@ def train(model_class, model_loss_class, generate_training_data, DataGenerator, 
         # After completing all training iterations for the current subdomain
         # --- 8. Subdomain Convergence Check and Saving/Splitting ---
 
-        MAX_SUBDOMAINS = 3
+        MAX_SUBDOMAINS = 8
         MIN_SUBDOMAIN_WIDTH = 0.02
 
         current_width = (

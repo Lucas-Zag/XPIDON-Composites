@@ -81,7 +81,7 @@ class XPIDON:
         self.a_params = (branch_params, trunk_params, nd_params)
         
         # Initialize Optax optimizer with an exponential decay learning rate schedule
-        self.schedule = optax.exponential_decay(init_value=1e-3,transition_steps=2000,
+        self.schedule = optax.exponential_decay(init_value=1e-3,transition_steps=4000,
                                     decay_rate=0.9,staircase=False, end_value = 1e-7)
 
         # Initialize separate optimizers and their states for T and alpha parameters
